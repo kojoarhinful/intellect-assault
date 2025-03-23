@@ -1,0 +1,114 @@
+import OpenAI from "openai"
+import { Pool } from "pg"
+
+// Simple database connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+})
+
+// Initialize database
+pool.query(`
+  CREATE TABLE IF NOT EXISTS quiz (
+    id SERIAL PRIMARY KEY,
+    group_id INTEGER NOT NULL,
+    question TEXT NOT NULL,
+    wrong_answer_1 TEXT NOT NULL,
+    wrong_answer_2 TEXT NOT NULL,
+    wrong_answer_3 TEXT NOT NULL,
+    correct_answer TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+`)
+
+// OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "",
+})
+
+export async function POST(req) {
+  try {
+    // Get image file
+    const formData = await req.formData()
+    const file = formData.get("file")
+
+    if (!file) {
+      return Response.json({ error: "No file provided" }, { status: 400 })
+    }
+
+    // Convert to base64
+    const bytes = await file.arrayBuffer()
+    const base64 = Buffer.from(bytes).toString("base64")
+
+    // Generate quiz with OpenAI
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert at analyzing images of handwritten or typed notes and converting them into effective multiple choice quiz questions. When given an image of notes, create 7 quiz questions based on the key concepts, each with 4 answer choices where only one is correct. Make the wrong choices plausible but clearly wrong to someone who understands the material.",
+        },
+        {
+          role: "user",
+          content: [{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } }],
+        },
+      ],
+      response_format: { type: "json_object" },
+    })
+
+    // Parse the response
+    const content = response.choices[0].message.content
+    const quiz = JSON.parse(content).questions
+
+    if (!quiz || !Array.isArray(quiz)) {
+      return Response.json({ error: "Failed to generate quiz" }, { status: 500 })
+    }
+
+    // Save to database
+    const { rows } = await pool.query("SELECT COUNT(*) FROM quiz")
+    const group_id = Number.parseInt(rows[0].count)
+
+    for (const q of quiz) {
+      await pool.query(
+        "INSERT INTO quiz (group_id, question, wrong_answer_1, wrong_answer_2, wrong_answer_3, correct_answer) VALUES ($1, $2, $3, $4, $5, $6)",
+        [group_id, q.question, q.wrong_answer_1, q.wrong_answer_2, q.wrong_answer_3, q.correct_answer],
+      )
+    }
+
+    return Response.json({ success: true, questions: quiz })
+  } catch (error) {
+    console.error("Error:", error)
+    return Response.json({ error: "Failed to generate quiz" }, { status: 500 })
+  }
+}
+
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const groupId = searchParams.get("group_id")
+
+    if (groupId) {
+      const { rows } = await pool.query("SELECT * FROM quiz WHERE group_id = $1 ORDER BY id ASC", [groupId])
+
+      if (rows.length === 0) {
+        return Response.json({ error: "No quiz found" }, { status: 404 })
+      }
+
+      return Response.json(rows)
+    }
+
+    // Get latest quiz
+    const { rows } = await pool.query("SELECT * FROM quiz ORDER BY group_id DESC, id ASC LIMIT 7")
+
+    if (rows.length === 0) {
+      return Response.json({ error: "No quizzes found" }, { status: 404 })
+    }
+
+    return Response.json(rows)
+  } catch (error) {
+    console.error("Error:", error)
+    return Response.json({ error: "Failed to fetch quizzes" }, { status: 500 })
+  }
+}
+
