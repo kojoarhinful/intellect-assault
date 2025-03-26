@@ -10,7 +10,6 @@ export async function getPool() {
         rejectUnauthorized: false,
       },
     });
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS quiz (
         id SERIAL PRIMARY KEY,
