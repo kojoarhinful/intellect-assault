@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { Button } from "../components/ui/button" // Try this first (up one level)
 import { CameraIcon, Upload } from "lucide-react"
 
 export default function Home() {
@@ -139,4 +139,3 @@ export default function Home() {
     </main>
   )
 }
-
