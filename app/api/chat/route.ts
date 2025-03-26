@@ -2,7 +2,7 @@
 import OpenAI from "openai"
 import { z } from "zod"
 import { zodResponseFormat } from "openai/helpers/zod"
-import { getPool } from "@/lib/db"
+import { getPool } from "../../../lib/db" // Changed from "@/lib/db"
 
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
@@ -81,4 +81,3 @@ export async function POST(req: Request) {
     headers: { "Content-Type": "application/json" },
   })
 }
-
