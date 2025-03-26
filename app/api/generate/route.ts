@@ -1,7 +1,8 @@
+// ./app/api/generate/route.ts
 import OpenAI from "openai"
 import { z } from "zod"
 import { zodResponseFormat } from "openai/helpers/zod"
-import { saveQuiz } from "@/lib/quiz"
+import { saveQuiz } from "../../../lib/quiz" // Changed from "@/lib/quiz"
 
 // Create an OpenAI API client
 const openai = new OpenAI({
@@ -93,4 +94,3 @@ export async function POST(req: Request) {
     )
   }
 }
-
